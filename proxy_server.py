@@ -6,7 +6,8 @@ import urllib.error
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-BACKEND = os.environ.get("BACKEND_URL", "http://127.0.0.1:8081")
+BACKEND = os.environ.get("BACKEND_URL", "").strip() or "http://127.0.0.1:8081"
+DEFAULT_ORIGIN = os.environ.get("DEFAULT_ORIGIN", "*")
 
 
 class ProxyHandler(SimpleHTTPRequestHandler):
@@ -21,7 +22,7 @@ class ProxyHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         if self.path.startswith("/api/") or self.path.startswith("/ws/"):
             self.send_response(200)
-            origin = self.headers.get("Origin", "*")
+            origin = self.headers.get("Origin", DEFAULT_ORIGIN)
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
             self.send_header("Access-Control-Allow-Headers", self.headers.get("Access-Control-Request-Headers", "content-type,authorization"))
@@ -61,13 +62,19 @@ class ProxyHandler(SimpleHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def _serve_static_or_index(self):
-        path = self.translate_path(self.path)
-        if self.path.endswith("/") or self.path in ("", "/"):
+        request_path = self.path.split("?", 1)[0].split("#", 1)[0]
+        if request_path in ("", "/", "/login", "/login.php", "/index", "/index.php"):
+            self.path = "/login.php"
+            self._serve_file(self.translate_path(self.path))
+            return
+        path = self.translate_path(request_path)
+        if request_path.endswith("/"):
             self.path = "/index.html"
             self._serve_file(self.translate_path(self.path))
             return
         if not os.path.exists(path):
-            self._serve_file(os.path.join(ROOT, "index.html"))
+            self.path = "/login.php"
+            self._serve_file(self.translate_path(self.path))
             return
         self._serve_file(path)
 
@@ -117,7 +124,7 @@ class ProxyHandler(SimpleHTTPRequestHandler):
                     if key.lower() in {"access-control-allow-origin", "access-control-allow-credentials", "access-control-allow-methods", "access-control-allow-headers"}:
                         continue
                     self.send_header(key, value)
-                origin = self.headers.get("Origin", "http://127.0.0.1:8080")
+                origin = self.headers.get("Origin", DEFAULT_ORIGIN)
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Access-Control-Allow-Credentials", "true")
                 self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS")
@@ -129,7 +136,7 @@ class ProxyHandler(SimpleHTTPRequestHandler):
             payload = error.read()
             self.send_response(error.code)
             self.send_header("Content-Type", error.headers.get_content_type() or "application/json")
-            origin = self.headers.get("Origin", "http://127.0.0.1:8080")
+            origin = self.headers.get("Origin", DEFAULT_ORIGIN)
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Credentials", "true")
             self.end_headers()

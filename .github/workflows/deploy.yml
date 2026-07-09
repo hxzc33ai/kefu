@@ -1,0 +1,19 @@
+name: 自动同步源码到InfinityFree主机
+on:
+  push:
+    branches: [ main ]
+jobs:
+  ftp上传源码:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取仓库全部源码
+        uses: actions/checkout@v4
+      - name: FTP推送文件到网站目录
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+        with:
+          server: ftp.hxzc33hx.infinityfree.me
+          username: 替换成你的InfinityFree FTP账号
+          password: 替换成你的主机FTP密码
+          local-dir: ./
+          server-dir: /htdocs/
+          clean: false
